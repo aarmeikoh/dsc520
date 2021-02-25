@@ -1,0 +1,146 @@
+---
+title: "Understanding Student Performance"
+author: "Aaron Kohn"
+date: "2/18/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+```
+
+# Section 2
+
+## How to import and clean my data
+The data can imported using the read.csv function. Please note that all files including the markdown script used to create this report are available in my [Git Hub Repository](https://github.com/aarmeikoh/dsc520/tree/master/Final%20Project)
+```{r load data}
+port_df <- read.csv("student-por.csv")
+math_df <- read.csv("student-mat.csv")
+usa_df <- read.csv("StudentsPerformance.csv")
+mideast_df <- read.csv("xAPI-Edu-Data.csv")
+```
+
+Remove students with a G3 score less than 4 in the Portuguese and Math data frames. These students are outliers and appear to be  missing values. This may be students who dropped the class or did not receive a final mark for unknown reasons. 
+```{r}
+port_df <- subset(port_df, port_df$G3 > 3, select = 1:33)
+math_df <- subset(math_df, math_df$G3 > 3, select = 1:33)
+```
+
+Remove unnecessary columns. From the Portuguese and math data sets the school, age and sex columns will be removed. These variables are not relevant for the questions being asked. The G1 and G2 columns will be removed as well, the target data is G3. It would be interesting to analyze if changes in behavior occurred between grades, however that information is not included in the data. In the Mid-East data set the columns 1 - 8 will be removed for the same reason as above. The United States Data will have the gender and race columns removed.    
+ 
+```{r}
+port_df <- port_df[,-c(1:3, 31, 32)]
+math_df <- math_df[,-c(1:3, 31, 32)]
+mideast_df <- mideast_df[,-c(1:8)]
+usa_df <- usa_df[,-c(1,2)]
+```
+
+Convert relevant columns to factors and boolean, and further read as numeric (saved in a new data frame).
+```{r}
+port_df$guardian <- factor(port_df$guardian, levels = c('other', 'mother', 'father'))
+port_df <- mutate_if(port_df, is.character, as.factor)
+port_df[,13:20] <- lapply(port_df[,13:20], function(x) as.logical(x == "yes"))
+math_df$guardian <- factor(math_df$guardian, levels = c('other', 'mother', 'father'))
+math_df <- mutate_if(math_df, is.character, as.factor)
+math_df[,13:20] <- lapply(math_df[,13:20], function(x) as.logical(x == "yes"))
+mideast_df$Class <- factor(mideast_df$Class, levels = c("L", "M", "H"))
+mideast_df$StudentAbsenceDays <- factor(mideast_df$StudentAbsenceDays, levels = c("Under-7", "Above-7"))
+mideast_df <- mutate_if(mideast_df, is.character, as.factor)
+mideast_df$ParentAnsweringSurvey <- lapply(mideast_df$ParentAnsweringSurvey, function(x) as.logical(x == "Yes"))
+usa_df$parental.level.of.education <- factor(usa_df$parental.level.of.education, levels = c("some high school", "high school", "some college", "associate's degree", "bachelor's degree", "master's degree" ))
+usa_df <- mutate_if(usa_df, is.character, as.factor)
+port_df.num <- mutate_all(port_df, as.numeric)
+math_df.num <- mutate_all(math_df, as.numeric)
+mideast_df.num <- mutate_all(mideast_df, as.numeric)
+usa_df.num <- mutate_all(usa_df, as.numeric)
+```
+
+## What does the final data set look like?
+
+The first few lines of each data set as factors and numeric.
+
+#### port_df
+```{r} 
+head(port_df, 5)
+```
+#### port_df.num
+```{r} 
+head(port_df.num, 5)
+```
+
+#### mideast_df
+```{r}
+head(mideast_df, 5)
+```
+
+#### mideast_df.num
+```{r} 
+head(mideast_df.num, 5)
+```
+
+#### usa_df
+```{r} 
+head(usa_df, 5)
+```
+
+#### usa_df.num
+```{r}
+head(usa_df.num, 5)
+```
+
+## Questions for future steps.
+
+At this point my I believe my data is clean and in the format that is usable for the analysis that I will be running. One option I think may be useful is if greater and less than variables can be used as numeric. Right now I am dealing with them as categorical.
+
+## What information is not self-evident?
+
+There are many variables in the data sets. By calculating the correlation coefficients more information will be obtained regarding which variables are related to enhanced student performance. Using linear models to predict outcomes can help identify groupings of variables that can be used to identify individuals more likely to be successful. 
+
+## What are different ways you could look at this data?
+
+While linear models may be helpful to predict which student is more likely to score higher, a more focused approach may provide more use. The variables can be divided into groups such as background which includes parents education levels, and other familial details. Variables that may be changed in order to improve outcome include in school participation and out of school activities. Testing for improvement in students with backgrounds less likely to succeed based on these variables can offer actionable information to help students. 
+
+## How do you plan to slice and dice the data?
+For the Portuguese and Math data sets I plan on combining columns of certain groups. Variables indicating amount of time spent on other activities outside of school can be combined. Alcohol consumption daily and weekly may be combined. Furthermore some adjustments may be made to the Parental status and guardian variables. How I want to deal with these values still requires some research. I have considered combining the data sets but since there are certain students present in both I think it would be wrong to have them represented twice rather I plan on using one to train with and the other to test on. It will be interesting to note if the models can carry over from one subject to another.
+
+```{r}
+
+```
+
+
+A variable combining measures of class participation will be added to the Mid-East data frame. 
+```{r}
+mideast_df$class.part <- (mideast_df$raisedhands + mideast_df$VisITedResources + 
+                            mideast_df$AnnouncementsView + mideast_df$Discussion)/4
+mideast_df.num$class.part <- mideast_df$class.part
+```
+
+
+In the United States data the dependent variable will be created from the average of the three subjects and the individual subjects removed.
+
+```{r}
+usa_df$avg.score <- round((usa_df$writing.score + usa_df$reading.score + usa_df$math.score)/3, 1)
+usa_df <- usa_df[,-c(4:6)]
+usa_df.num <- mutate_all(usa_df, as.numeric) 
+```
+
+
+## How could you summarize your data to answer key questions?
+
+Since many of the variables do not contain continuous data, using the mean to determine improvement will be helpful. Using plots to illustrate the improvement will help demonstrate the effect of a variable.
+
+## What types of plots and tables will help you to illustrate the findings to your questions? 
+
+As discussed in part 1 heat maps will be used to demonstrate correlations between variables. Scatter plots will be used to demonstrate relationships and accuracy of models.
+
+## Do you plan on incorporating any machine learning techniques to answer your research questions? Explain.
+
+I would like to use knn algorithms to determine which group of variables can best predict student scores. The goal is to find the highest accuracy with few variables.
+
+## Questions for future steps.
+At this point I have the data in a usable format, and have a plan of what analysis I want to do. I still need to further understand the data to know how to combine certain variables to analyze their combined effect. Also, is there a way to analyze the certain cases with having to subset the data?  
+I am still experimenting with different models to determine which variables have the greatest effect on the outcome. One question I would like answered is which variables do students who preform poorly share? What is the best method to determine that?  
+Finally I hope to acquire experience designing plots and graphs in a way that is most illustrative to the reader. The pipe operator is a great tool. I am still not used to using it but can see it coming very handy as I continue to work with R.
