@@ -1,0 +1,153 @@
+---
+title: "Effects on Students' Marks"
+author: "Aaron Kohn"
+date: "2/27/2021"
+output:
+  word_document: default
+  html_document: default
+bibliography: bibliography.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+library(ggplot2)
+library(reshape)
+library(gridExtra)
+```
+
+##	Introduction.
+  Parents, schools, and governments spend a lot of resources trying to improve the education of students. Understanding how and where to focus those resources can maximize the benefits. Knowing which students can use the help most, and what practices can be implemented will increase the chances for success.
+
+##	Which student is most likely to succeed? How can a students likelyhood be improved?
+  Using the data, what family circumstances can be said to contribute to the success or failure of a student? To what level can one use this information to predict the student's performance? Can parental or a student's habits be changed to enhance performance? Which factor has the greatest effect in improving scores?
+
+##	Initial steps
+#### Loading the Data
+```{r load data}
+port_df <- read.csv("student-por.csv")
+math_df <- read.csv("student-mat.csv")
+usa_df <- read.csv("StudentsPerformance.csv")
+mideast_df <- read.csv("xAPI-Edu-Data.csv")
+```
+  The primary research will be done on the [port_df](https://www.kaggle.com/larsen0966/student-performance-data-set) and [math_df](https://www.kaggle.com/janiobachmann/math-students) data sets [@cs08]. Since the data sets have overlapping instances the port_df data will be used to train on and the math_df will be used for testing. The [usa_df](https://www.kaggle.com/spscientist/students-performance-in-exams) and [mideast_df](https://www.kaggle.com/aljarah/xAPI-Edu-Data) [@aha15] [@aha16] contain less variables and will be used to see if the findings can be confirmed in other data.  
+
+#### Data Cleaning
+```{r clean data 1}
+port_df$guardian <- factor(port_df$guardian, levels = c('other', 'mother', 'father'))
+port_df <- mutate_if(port_df, is.character, as.factor)
+port_df[,16:23] <- lapply(port_df[,16:23], function(x) as.logical(x == "yes"))
+math_df$guardian <- factor(math_df$guardian, levels = c('other', 'mother', 'father'))
+math_df <- mutate_if(math_df, is.character, as.factor)
+math_df[,16:23] <- lapply(math_df[,16:23], function(x) as.logical(x == "yes"))
+mideast_df$Class <- factor(mideast_df$Class, levels = c("L", "M", "H"))
+mideast_df$StudentAbsenceDays <- factor(mideast_df$StudentAbsenceDays, levels = c("Under-7", "Above-7"))
+mideast_df <- mutate_if(mideast_df, is.character, as.factor)
+mideast_df$ParentAnsweringSurvey <- lapply(mideast_df$ParentAnsweringSurvey, function(x) as.logical(x == "Yes"))
+usa_df$parental.level.of.education <- factor(usa_df$parental.level.of.education, levels = c("some high school", "high school", "some college", "associate's degree", "bachelor's degree", "master's degree" ))
+usa_df <- mutate_if(usa_df, is.character, as.factor)
+port_df.num <- mutate_all(port_df, as.numeric)
+math_df.num <- mutate_all(math_df, as.numeric)
+mideast_df.num <- mutate_all(mideast_df, as.numeric)
+usa_df.num <- mutate_all(usa_df, as.numeric)
+```
+  Columns of type character were converted to factors or logical. In addition, a copy of the data set was created with factors converted to numeric in order to allow for exploration of correlations between variables.  
+  In addition columns that will not be used will be removed. Although there is a relationship between age and final marks in the port_df, R = `r round(cor(port_df$age, port_df$G3), 2)`, much of it can be explained by the correlation with other variables. Many of the other factors removed are beyond the scope of this study. Marks, in the port_df and math_df, less than 3 were removed as they appear to be missing or incomplete data.
+
+```{r remove and add variables}
+port_df <- subset(port_df, port_df$G3 > 3, select = 1:33)
+math_df <- subset(math_df, math_df$G3 > 3, select = 1:33)
+port_df$otheract <- (port_df$freetime + port_df$goout + port_df$Dalc + port_df$Walc)/4
+port_df <- port_df[,-c(1:3, 31, 32)]
+math_df <- math_df[,-c(1:3, 31, 32)]
+mideast_df <- mideast_df[,-c(1:8)]
+mideast_df$class.part <- (mideast_df$raisedhands + mideast_df$VisITedResources + 
+                            mideast_df$AnnouncementsView + mideast_df$Discussion)
+usa_df <- usa_df[,-c(1,2)]
+
+usa_df$avg.score <- round((usa_df$writing.score + usa_df$reading.score + usa_df$math.score)/3, 1)
+usa_df <- usa_df[,-c(4:6)]
+port_df.num <- mutate_all(port_df, as.numeric)
+math_df.num <- mutate_all(math_df, as.numeric)
+mideast_df.num <- mutate_all(mideast_df, as.numeric)
+usa_df.num <- mutate_all(usa_df, as.numeric)
+```
+
+#### Methodology
+  Correlation between values is used to determine any relationship between values. Further exploration of variables of interest will be conducted. Plots modeling relationships of variables will be used to illustrate the effects of the variable. Linear models will be fitted to indicate the expected effect.
+```{r correlation map}
+# port_df
+relmat <- cor(port_df.num, method = "kendall")
+shap_relmat <- melt(relmat)
+
+plota <- ggplot(data = shap_relmat, aes(x= X1, y= X2, fill= value)) + geom_tile() + ggtitle("port_df correlations") + xlab("") + ylab("") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0, size = 10, hjust = 1)) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Kendall's\nTau")
+# usa_df
+usccor<- cor(usa_df.num, method = "kendall")
+muscor <- melt(usccor)
+plotb <- ggplot(data = muscor, aes(x= X1, y= X2, fill= value)) + geom_tile() + ggtitle("usa_df coorelations") +theme_minimal() + xlab("") + ylab("") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0, size = 10, hjust = 1)) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Kendall's\nTau")
+# mideast_df
+midcor <- round(cor(mideast_df.num, method = "kendal"), 3)
+melmidcor <- melt(midcor)
+plotc <- ggplot(data = melmidcor, aes(x= X1, y= X2, fill= value)) + geom_tile() + ggtitle("mideast_df correlations") + theme_minimal() + xlab("") + ylab("")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0, size = 10, hjust = 1)) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Kendall's\nTau") 
+plota 
+plotb 
+plotc
+```
+  
+##	Analysis. 
+  Some interesting variables that are worth noting. The previous failure variable has a correlation of `r cor(port_df$G3, port_df$failures)`. However, it is logical to assume that the same contributors to previous bad results are still at play. Similarly in the usa_df the test preparation course does not seem to have the desired effect. Still it would be interesting to see if the students taking the course are ones that have previously done poorly.  
+  One factor that negatively effects grades is the amount of time spent on travel. The correlation to grades is `r cor(port_df$G3, port_df$traveltime)`. It is interesting to note that this is consistent across many other variables.
+```{r, message= FALSE}
+ggplot(port_df, aes(y= G3,x= traveltime, color= higher )) + geom_count(shape= 18, position= position_dodge(width = 1)) + geom_smooth(method = "lm") + scale_size(name = "count") + ggtitle( "Travel Time Effect", subtitle = "by plan to continue for higher education")
+ggplot(port_df, aes(y= G3,x= traveltime, color= reason )) + geom_count(shape= 18, position= position_dodge(width = .5)) + geom_smooth(method = "lm") + scale_size(name = "count") + ggtitle("",subtitle = "by reason for selecting school")
+ggplot(port_df, aes(y= G3,x= traveltime, color= address )) + geom_count(shape= 18, position= position_dodge(width = .2)) + geom_smooth(method = "lm") + scale_size(name = "count") + ggtitle("",subtitle = "by Urban or Rural")
+```
+  
+  A factor that is predictable to have a negative effect is absences.
+  
+```{r, message= FALSE}
+ggplot(port_df, aes(y= G3,x= absences )) + geom_count(shape= 18, position= position_dodge(width = 1)) + geom_smooth(method = "lm") + scale_size(name = "count") + ggtitle("Absences")
+```
+
+Below is a plot showing the positive effect of time spent studying as compared to the negative effect of other distractions.
+
+```{r, message= FALSE}
+ggplot(port_df, aes(y= G3,x= studytime, color= romantic )) + geom_count(shape= 18, position= position_dodge(width = .2)) + geom_smooth(method = "lm") + geom_smooth(aes(x=otheract),method = "lm") + scale_size(name = "count") + ggtitle("Study Time Effect") + xlab("time studying compared to other activities")
+```
+
+  Another illustration on the importance of study time is included below. While parent education levels are correlated with a child's success, it is interesting to note the effect of time spent studying.
+  
+```{r, message= FALSE}
+`father education` <- as.factor(port_df$Fedu)
+ggplot(port_df, aes(y= G3,x=studytime , color= `father education`)) + geom_count(shape= 18, position= position_dodge(width = .2)) + geom_smooth(method = "lm") + scale_size(name = "count") + ggtitle("Benefit of Study Time", subtitle = "for students by father education level")
+`mother education` <- as.factor(port_df$Medu)
+ggplot(port_df, aes(y= G3,x=studytime , color= `mother education`)) + geom_count(shape= 18, position= position_dodge(width = .2)) + geom_smooth(method = "lm") + scale_size(name = "count") + ggtitle("", "for students by mother education level")
+```
+  
+##	Implications.
+
+  While it may be obvious it is worth noting again the benefits of studying. The steep benefit for students with mothers with an education level of 0 underscores that there are ways to improve students with lower score expectations. Also reducing outside distractions seems to be a contributor to success.  
+  An interesting finding is the negative effect of time spent traveling to school. This holds across all reasons of school selection. The best school may be the one closest to home.
+  
+##	Limitations. 
+
+  This study avoided questions such as race, gender and socio-economic factors. While these may be large contributing factors it is currently beyond the scope of this study. There are many contributing factors to each of those questions that would need to be studied.  
+  Further analysis would need to be done to analyze which factors can best predict a students performance. The focus of the analysis was to determine how to improve scores. This can be studied and analyzed using the above methods. Further analysis to determine subgroups of students that can benefit from different interventions would be of interest.
+
+##	Concluding Remarks
+  
+  Finding that the effect of increased study time specifically benefits students with lower expectations due to parent education levels underscores the importance of finding ways to help improve scores. Increasing study time may override any benefit of higher educated parents. Hopefully continued analysis and studies will help improve education for all students in general an specifically for students perceived to be disadvantaged. 
+
+## References
